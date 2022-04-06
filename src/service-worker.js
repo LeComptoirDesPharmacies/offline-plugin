@@ -17,6 +17,7 @@ export default class ServiceWorker {
     }
 
     this.minify = options.minify;
+    this.minifyOptions = options.minifyOptions;
     this.output = options.output.replace(/^\.\/+/, '');
     this.publicPath = options.publicPath;
 
@@ -68,7 +69,7 @@ export default class ServiceWorker {
 
     const optimization = compiler.options.optimization || {};
 
-    const uglifyOptions = {
+    const uglifyOptions = this.minifyOptions ?? {
       compress: {
         warnings: false,
         dead_code: true,
