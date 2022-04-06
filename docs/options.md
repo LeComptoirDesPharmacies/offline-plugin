@@ -98,6 +98,9 @@ _Example:_ `{ credentials: 'include' }`
 * **`minify`**: `boolean`. If set to `true` or `false`, the `ServiceWorker`'s output will be minified or not accordingly. If set to something else, the `ServiceWorker` output will be minified **if** you are using `webpack.optimize.UglifyJsPlugin` or `terser-webpack-plugin` in your configuration.
 _Default:_ `null`
 
+* **`minifyOptions`**: `object`. Adds a possibility to override options for your minifier.
+_Default:_ `null`
+
 #### `publicPath: string`
 
 Similar to `webpack`'s `output.publicPath` option. Useful to specify or override `publicPath` specifically for `offline-plugin`. When not specified, `webpack`'s `output.publicPath` value is used. When `publicPath` value isn't specified at all (either by this option or by `webpack`'s `output.publicPath` option), relative paths are used (see `relativePaths` option).
