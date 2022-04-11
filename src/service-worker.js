@@ -1,23 +1,30 @@
-import SingleEntryPlugin from 'webpack/lib/SingleEntryPlugin';
-import { makeMinificationPlugin, isMinificationPlugin } from './misc/get-minification-plugin';
-import path from 'path';
-import deepExtend from 'deep-extend';
+import SingleEntryPlugin from "webpack/lib/SingleEntryPlugin";
 import {
-  getSource, pathToBase, isAbsoluteURL,
-  isAbsolutePath, functionToString
-} from './misc/utils';
+  makeMinificationPlugin,
+  isMinificationPlugin,
+} from "./misc/get-minification-plugin";
+import path from "path";
+import deepExtend from "deep-extend";
+import {
+  getSource,
+  pathToBase,
+  isAbsoluteURL,
+  isAbsolutePath,
+  functionToString,
+} from "./misc/utils";
 
 export default class ServiceWorker {
   constructor(options) {
     if (isAbsolutePath(options.output)) {
       throw new Error(
-        'OfflinePlugin: ServiceWorker.output option must be a relative path, ' +
-        'but an absolute path was passed'
+        "OfflinePlugin: ServiceWorker.output option must be a relative path, " +
+          "but an absolute path was passed"
       );
     }
 
     this.minify = options.minify;
-    this.output = options.output.replace(/^\.\/+/, '');
+    this.minifyOptions = options.minifyOptions;
+    this.output = options.output.replace(/^\.\/+/, "");
     this.publicPath = options.publicPath;
 
     this.basePath = null;
@@ -26,22 +33,22 @@ export default class ServiceWorker {
 
     // Tool specific properties
     this.entry = options.entry;
-    this.scope = options.scope ? options.scope + '' : void 0;
+    this.scope = options.scope ? options.scope + "" : void 0;
     this.events = !!options.events;
     this.prefetchRequest = this.validatePrefetch(options.prefetchRequest);
-    this.updateViaCache = (options.updateViaCache || '') + '';
+    this.updateViaCache = (options.updateViaCache || "") + "";
     this.navigationPreload = options.navigationPreload;
     this.forceInstall = !!options.forceInstall;
 
-    let cacheNameQualifier = '';
+    let cacheNameQualifier = "";
 
     if (options.cacheName) {
-      cacheNameQualifier = ':' + options.cacheName;
+      cacheNameQualifier = ":" + options.cacheName;
     }
 
-    this.ENTRY_NAME = 'serviceworker';
-    this.CACHE_NAME = 'webpack-offline' + cacheNameQualifier;
-    this.SW_DATA_VAR = '__wpo';
+    this.ENTRY_NAME = "serviceworker";
+    this.CACHE_NAME = "webpack-offline" + cacheNameQualifier;
+    this.SW_DATA_VAR = "__wpo";
   }
 
   addEntry(plugin, compilation, compiler) {
@@ -50,40 +57,47 @@ export default class ServiceWorker {
     const name = plugin.entryPrefix + this.ENTRY_NAME;
     const childCompiler = compilation.createChildCompiler(name, {
       // filename: this.output
-      filename: name
+      filename: name,
     });
 
     const data = JSON.stringify({
       data_var_name: this.SW_DATA_VAR,
       cacheMaps: plugin.cacheMaps,
-      navigationPreload: this.stringifyNavigationPreload(this.navigationPreload, plugin)
+      navigationPreload: this.stringifyNavigationPreload(
+        this.navigationPreload,
+        plugin
+      ),
     });
 
-    const swLoaderPath = path.join(__dirname, 'misc/sw-loader.js');
-    const loader = '!!' + swLoaderPath + '?json=' + escape(data);
-    const entry = loader + '!' + this.entry;
+    const swLoaderPath = path.join(__dirname, "misc/sw-loader.js");
+    const loader = "!!" + swLoaderPath + "?json=" + escape(data);
+    const entry = loader + "!" + this.entry;
 
     childCompiler.context = compiler.context;
     new SingleEntryPlugin(compiler.context, entry, name).apply(childCompiler);
 
     const optimization = compiler.options.optimization || {};
 
-    const uglifyOptions = {
-      compress: {
-        warnings: false,
-        dead_code: true,
-        drop_console: true,
-        unused: true
-      },
+    const uglifyOptions = this.minifyOptions
+      ? this.minifyOptions
+      : {
+          compress: {
+            warnings: false,
+            dead_code: true,
+            drop_console: true,
+            unused: true,
+          },
 
-      output: {
-        comments: false
-      }
-    };
+          output: {
+            comments: false,
+          },
+        };
 
     if (this.minify === true) {
       if (makeMinificationPlugin == null) {
-        throw new Error('OfflinePlugin: uglifyjs-webpack-plugin or terser-webpack-plugin is required to preform a minification')
+        throw new Error(
+          "OfflinePlugin: uglifyjs-webpack-plugin or terser-webpack-plugin is required to preform a minification"
+        );
       }
 
       const options = {
@@ -93,21 +107,23 @@ export default class ServiceWorker {
 
       makeMinificationPlugin(options).apply(childCompiler);
     } else if (
-      (this.minify !== false || optimization.minimize) && makeMinificationPlugin
+      (this.minify !== false || optimization.minimize) &&
+      makeMinificationPlugin
     ) {
       // Do not perform auto-minification if MinificationPlugin isn't installed
 
       const added = ((optimization.minimize && optimization.minimizer) || [])
-      .concat(compiler.options.plugins || []).some((plugin) => {
-        if (isMinificationPlugin(plugin)) {
-          const options = deepExtend({}, plugin.options);
+        .concat(compiler.options.plugins || [])
+        .some((plugin) => {
+          if (isMinificationPlugin(plugin)) {
+            const options = deepExtend({}, plugin.options);
 
-          options.test = new RegExp(name);
-          makeMinificationPlugin(options).apply(childCompiler);
+            options.test = new RegExp(name);
+            makeMinificationPlugin(options).apply(childCompiler);
 
-          return true;
-        }
-      });
+            return true;
+          }
+        });
 
       if (!added && optimization.minimize) {
         const options = {
@@ -132,10 +148,10 @@ export default class ServiceWorker {
     };
 
     if (childCompiler.hooks) {
-      const plugin = { name: 'OfflinePlugin' };
+      const plugin = { name: "OfflinePlugin" };
       childCompiler.hooks.compilation.tap(plugin, compilationFn);
     } else {
-      childCompiler.plugin('compilation', compilationFn);
+      childCompiler.plugin("compilation", compilationFn);
     }
 
     return new Promise((resolve, reject) => {
@@ -153,17 +169,16 @@ export default class ServiceWorker {
   apply(plugin, compilation, compiler) {
     let minify;
 
-    if (typeof this.minify === 'boolean') {
+    if (typeof this.minify === "boolean") {
       minify = this.minify;
     } else {
-      minify = makeMinificationPlugin && (
-        !!(
+      minify =
+        makeMinificationPlugin &&
+        (!!(
           compiler.options.optimization &&
           compiler.options.optimization.minimize
-        ) || !!(
-          (compiler.options.plugins || []).some(isMinificationPlugin)
-        )
-      );
+        ) ||
+          !!(compiler.options.plugins || []).some(isMinificationPlugin));
     }
 
     let source = this.getDataTemplate(plugin.caches, plugin, minify);
@@ -174,7 +189,9 @@ export default class ServiceWorker {
 
       if (!asset) {
         compilation.errors.push(
-          new Error('OfflinePlugin: ServiceWorker entry is not found in output assets')
+          new Error(
+            "OfflinePlugin: ServiceWorker entry is not found in output assets"
+          )
         );
 
         return;
@@ -183,7 +200,7 @@ export default class ServiceWorker {
       delete compilation.assets[name];
 
       if (!plugin.__tests.swMetadataOnly) {
-        source += '\n\n' + asset.source();
+        source += "\n\n" + asset.source();
       }
     }
 
@@ -197,13 +214,12 @@ export default class ServiceWorker {
       return (data[key] || []).map(rewriteFunction);
     };
 
-    const hashesMap = Object.keys(plugin.hashesMap)
-      .reduce((result, hash) => {
-        const asset = plugin.hashesMap[hash];
+    const hashesMap = Object.keys(plugin.hashesMap).reduce((result, hash) => {
+      const asset = plugin.hashesMap[hash];
 
-        result[hash] = rewriteFunction(asset);
-        return result;
-      }, {});
+      result[hash] = rewriteFunction(asset);
+      return result;
+    }, {});
 
     const externals = plugin.externals.map(rewriteFunction);
 
@@ -214,11 +230,12 @@ export default class ServiceWorker {
     }
 
     return `
-      var ${ this.SW_DATA_VAR } = ${ JSON.stringify({
+      var ${this.SW_DATA_VAR} = ${JSON.stringify(
+      {
         assets: {
-          main: cache('main'),
-          additional: cache('additional'),
-          optional: cache('optional')
+          main: cache("main"),
+          additional: cache("additional"),
+          optional: cache("optional"),
         },
 
         externals: externals,
@@ -238,7 +255,10 @@ export default class ServiceWorker {
         alwaysRevalidate: plugin.alwaysRevalidate,
         preferOnline: plugin.preferOnline,
         ignoreSearch: plugin.ignoreSearch,
-      }, null, minify ? void 0 : '  ') };
+      },
+      null,
+      minify ? void 0 : "  "
+    )};
     `.trim();
   }
 
@@ -248,7 +268,7 @@ export default class ServiceWorker {
       scope: this.scope,
       updateViaCache: this.updateViaCache,
       events: this.events,
-      force: this.forceInstall
+      force: this.forceInstall,
     };
   }
 
@@ -258,9 +278,9 @@ export default class ServiceWorker {
     }
 
     if (
-      request.credentials === 'same-origin' &&
+      request.credentials === "same-origin" &&
       request.headers === void 0 &&
-      request.mode === 'cors' &&
+      request.mode === "cors" &&
       request.cache === void 0
     ) {
       return void 0;
@@ -270,21 +290,21 @@ export default class ServiceWorker {
       credentials: request.credentials,
       headers: request.headers,
       mode: request.mode,
-      cache: request.cache
+      cache: request.cache,
     };
   }
 
   stringifyNavigationPreload(navigationPreload, plugin) {
     let result;
 
-    if (typeof navigationPreload === 'object') {
+    if (typeof navigationPreload === "object") {
       result = navigationPreload = `{
         map: ${functionToString(navigationPreload.map)},
         test: ${functionToString(navigationPreload.test)}
       }`;
     } else {
-      if (typeof navigationPreload !== 'boolean') {
-        if (plugin.responseStrategy === 'network-first') {
+      if (typeof navigationPreload !== "boolean") {
+        if (plugin.responseStrategy === "network-first") {
           navigationPreload = true;
         } else {
           navigationPreload = false;
