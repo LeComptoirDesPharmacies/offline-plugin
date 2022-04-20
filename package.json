@@ -43,7 +43,7 @@
   "license": "MIT",
   "dependencies": {
     "deep-extend": "^0.5.1",
-    "ejs": "^3.1.6",
+    "ejs": "^3.1.7",
     "loader-utils": "0.2.x",
     "minimatch": "^3.0.3",
     "slash": "^1.0.0"
