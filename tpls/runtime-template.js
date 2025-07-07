@@ -7,7 +7,7 @@ function hasSW() {
   <% } else { %>
     return 'serviceWorker' in navigator && (
       window.location.protocol === 'https:' ||
-      window.location.hostname === 'localhost' ||
+      /^(.*\.)?localhost$/.test(window.location.hostname) || // only localhost or ends with .localhost
       window.location.hostname.indexOf('127.') === 0
     );
   <% } %>
