@@ -19,7 +19,7 @@
     "test:ci_all": "npm run test:ci_fixtures && npm run test:ci_browser",
     "build": "./node_modules/.bin/babel src/ -d lib/",
     "watch": "npm run build -- --watch",
-    "preinstall": "npx @lcdp/assert-safe-chain@1.0.0",
+    "preinstall": "npx --yes @lcdp/assert-safe-chain@1.0.0",
     "install:build-deps": "node build/install-build-deps.js",
     "install:browser-tests": "node build/install-browser-tests.js",
     "tag": "git push && git push --tags",
