@@ -12,7 +12,7 @@ If you are looking for the original `v5` from <a href="https://github.com/NekR/o
 
 ## Install
 
-`npm install @lcdp/offline-plugin [--save-dev]`
+`aikido-pnpm add @lcdp/offline-plugin [-D]`
 
 ## Setup
 
