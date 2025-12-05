@@ -50,6 +50,13 @@
     "minimatch": "^3.0.3",
     "slash": "^1.0.0"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.24.0",
+      "onFail": "error"
+    }
+  },
   "bugs": {
     "url": "https://github.com/LeComptoirDesPharmacies/offline-plugin/issues"
   },
