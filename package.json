@@ -90,5 +90,5 @@
   },
   "testsBrowserDependencies": {
     "puppeteer": "^1.1.1"
-  },
+  }
 }
