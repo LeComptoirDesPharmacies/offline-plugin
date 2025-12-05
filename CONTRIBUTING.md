@@ -10,8 +10,8 @@ Typically you want to send your PRs against `master` branch. Other branches such
 
 ## Installation / prepare
 
-* `aikido-pnpm install`
-* `aikido-pnpm run install:build-deps`
+* `pnpm install`
+* `pnpm run install:build-deps`
 
 ## Development
 
@@ -22,7 +22,7 @@ Project structure:
 * `tpls/` tpls to generate dynamic files, e.g. `offline-plugin/runtime`
 
 
-Before submitting a PR you have to run `aikido-pnpm run build` to transpile scripts from `src/` to `lib/` (also you can use `aikido-pnpm run watch`). Also make sure to run `aikido-pnpm test` before you perform any changes, to not break other things.
+Before submitting a PR you have to run `pnpm run build` to transpile scripts from `src/` to `lib/` (also you can use `pnpm run watch`). Also make sure to run `pnpm test` before you perform any changes, to not break other things.
 
 If you are adding a new feature, make sure to write tests for it
 
