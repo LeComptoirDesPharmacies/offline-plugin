@@ -19,7 +19,7 @@
     "test:ci_all": "pnpm run test:ci_fixtures && pnpm run test:ci_browser",
     "build": "./node_modules/.bin/babel src/ -d lib/",
     "watch": "pnpm run build -- --watch",
-    "preinstall": "pnpm dlx @lcdp/assert-safe-chain@1.0.7",
+    "devPreinstall": "pnpm dlx @lcdp/assert-safe-chain@1.0.7",
     "install:build-deps": "node build/install-build-deps.js",
     "install:browser-tests": "node build/install-browser-tests.js",
     "tag": "git push && git push --tags",
