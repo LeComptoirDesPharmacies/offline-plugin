@@ -1,6 +1,6 @@
 {
   "name": "@lcdp/offline-plugin",
-  "version": "5.1.4",
+  "version": "5.1.5",
   "description": "offline-plugin for webpack",
   "main": "lib/index.js",
   "files": [
