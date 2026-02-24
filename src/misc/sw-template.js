@@ -304,7 +304,7 @@ function WebpackServiceWorker(params, helpers) {
         // Preload is used only if navigationPreload is enabled and
         // navigationPreload mapping is not used.
         if (navigationPreload === true) {
-          event.respondWith(fetchWithPreload(event));
+          event.respondWith(fetchWithPreload(event).catch(() => fetch(event.request)));
           return;
         }
       }
@@ -314,7 +314,7 @@ function WebpackServiceWorker(params, helpers) {
         const preloadedResponse = retrivePreloadedResponse(event);
 
         if (preloadedResponse) {
-          event.respondWith(preloadedResponse);
+          event.respondWith(Promise.resolve(preloadedResponse).catch(() => fetch(event.request)));
           return;
         }
       }
@@ -335,7 +335,7 @@ function WebpackServiceWorker(params, helpers) {
       resource = cacheFirstResponse(event, urlString, cacheUrl);
     }
 
-    event.respondWith(resource);
+    event.respondWith(resource.catch(() => fetch(event.request)));
   });
 
   self.addEventListener('message', (e) => {
@@ -387,7 +387,7 @@ function WebpackServiceWorker(params, helpers) {
             console.log('[SW]:', 'Cache asset: ' + urlString);
           });
 
-          event.waitUntil(storing);
+          event.waitUntil(storing.catch(() => {}));
         }
 
         return response;
@@ -494,7 +494,7 @@ function WebpackServiceWorker(params, helpers) {
       });
     });
 
-    event.waitUntil(storing);
+    event.waitUntil(storing.catch(() => {}));
   }
 
   function retriveInMemoryPreloadedResponse(url) {
@@ -534,7 +534,7 @@ function WebpackServiceWorker(params, helpers) {
 
     if (fromMemory) {
       event.waitUntil(
-        caches.open(PRELOAD_CACHE_NAME).then(cache => cache.delete(request))
+        caches.open(PRELOAD_CACHE_NAME).then(cache => cache.delete(request)).catch(() => {})
       );
 
       return fromMemory;
@@ -543,7 +543,7 @@ function WebpackServiceWorker(params, helpers) {
     return cachesMatch(request, PRELOAD_CACHE_NAME).then(response => {
       if (response) {
         event.waitUntil(
-          caches.open(PRELOAD_CACHE_NAME).then(cache => cache.delete(request))
+          caches.open(PRELOAD_CACHE_NAME).then(cache => cache.delete(request)).catch(() => {})
         );
       }
 
