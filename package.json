@@ -10,28 +10,28 @@
     "runtime.d.ts"
   ],
   "scripts": {
-    "test": "pnpm run test:fixtures",
+    "test": "npm run test:fixtures",
     "test:browser": "node tests/run-browser-tests.js",
     "test:fixtures": "node tests/legacy/run && eslint -c configs/eslint.tests.json tests/legacy/fixtures",
     "test:fixtures:fix": "node tests/legacy/run --fix",
-    "test:ci_fixtures": "pnpm run test:fixtures",
-    "test:ci_browser": "pnpm run install:browser-tests && pnpm run test:browser",
-    "test:ci_all": "pnpm run test:ci_fixtures && pnpm run test:ci_browser",
+    "test:ci_fixtures": "npm run test:fixtures",
+    "test:ci_browser": "npm run install:browser-tests && npm run test:browser",
+    "test:ci_all": "npm run test:ci_fixtures && npm run test:ci_browser",
     "build": "./node_modules/.bin/babel src/ -d lib/",
-    "watch": "pnpm run build -- --watch",
-    "devPreinstall": "pnpm dlx @lcdp/assert-safe-chain@1.0.7",
+    "watch": "npm run build -- --watch",
+    "devPreinstall": "npx @lcdp/assert-safe-chain@1.0.7",
     "install:build-deps": "node build/install-build-deps.js",
     "install:browser-tests": "node build/install-browser-tests.js",
     "tag": "git push && git push --tags",
-    "publish:latest": "pnpm publish",
-    "publish:next": "pnpm publish --tag=next",
-    "release:latest:patch": "pnpm version patch -m '[ci skip] Release %s' && pnpm run tag && pnpm run publish:latest",
-    "release:latest:minor": "pnpm version minor -m '[ci skip] Release %s' && pnpm run tag && pnpm run publish:latest",
-    "release:latest:major": "pnpm version major -m '[ci skip] Release %s' && pnpm run tag && pnpm run publish:latest",
-    "release:next:patch": "pnpm --no-git-tag-version version prepatch && pnpm run publish:next",
-    "release:next:minor": "pnpm --no-git-tag-version version preminor && pnpm run publish:next",
-    "release:next:major": "pnpm --no-git-tag-version version premajor && pnpm run publish:next",
-    "release:next:update": "pnpm --no-git-tag-version version prerelease && pnpm run publish:next"
+    "publish:latest": "npm publish",
+    "publish:next": "npm publish --tag=next",
+    "release:latest:patch": "npm version patch -m '[ci skip] Release %s' && npm run tag && npm run publish:latest",
+    "release:latest:minor": "npm version minor -m '[ci skip] Release %s' && npm run tag && npm run publish:latest",
+    "release:latest:major": "npm version major -m '[ci skip] Release %s' && npm run tag && npm run publish:latest",
+    "release:next:patch": "npm --no-git-tag-version version prepatch && npm run publish:next",
+    "release:next:minor": "npm --no-git-tag-version version preminor && npm run publish:next",
+    "release:next:major": "npm --no-git-tag-version version premajor && npm run publish:next",
+    "release:next:update": "npm --no-git-tag-version version prerelease && npm run publish:next"
   },
   "repository": {
     "type": "git",
@@ -50,15 +50,11 @@
     "minimatch": "^3.0.3",
     "slash": "^1.0.0"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "10.24.0",
-      "onFail": "error"
-    }
-  },
   "bugs": {
     "url": "https://github.com/LeComptoirDesPharmacies/offline-plugin/issues"
+  },
+  "engines": {
+    "npm": "please-use-pnpm"
   },
   "homepage": "https://github.com/LeComptoirDesPharmacies/offline-plugin",
   "keywords": [
