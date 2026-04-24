@@ -1,4 +1,3 @@
-import SingleEntryPlugin from 'webpack/lib/SingleEntryPlugin';
 import { makeMinificationPlugin, isMinificationPlugin } from './misc/get-minification-plugin';
 import path from 'path';
 import deepExtend from 'deep-extend';
@@ -64,7 +63,8 @@ export default class ServiceWorker {
     const entry = loader + '!' + this.entry;
 
     childCompiler.context = compiler.context;
-    new SingleEntryPlugin(compiler.context, entry, name).apply(childCompiler);
+    const { EntryPlugin } = compiler.webpack;
+    new EntryPlugin(compiler.context, entry, name).apply(childCompiler);
 
     const optimization = compiler.options.optimization || {};
 
