@@ -43,7 +43,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "babel": "^5.8.38",
     "deep-extend": "^0.5.1",
     "ejs": "^3.1.7",
     "loader-utils": "0.2.x",
