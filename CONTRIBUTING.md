@@ -28,6 +28,6 @@ If you are adding a new feature, make sure to write tests for it
 
 ## Writing tests
 
-Tests are located in `tests/legacy/fixtures` folder. Right now it's only webpack generated code fixtures, no ServiceWorker tests yet. Just copy most similar to your case test (e.g. `basic`) and adopt it for the new feature.
+Tests are located in `tests/fixtures/cases` folder. Right now it's only webpack generated code fixtures, no ServiceWorker tests yet. Just copy most similar to your case test (e.g. `basic`) and adopt it for the new feature.
 
 ## Thank you!

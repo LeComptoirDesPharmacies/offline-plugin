@@ -1,0 +1,112 @@
+name: CI / Publish
+
+on:
+  push:
+    branches:
+      - master
+      - 'bugfix/**'
+      - 'feature/**'
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fixture tests
+        run: pnpm run test:fixtures
+
+      - name: Build lib/
+        run: pnpm run build
+
+      - name: Resolve published version
+        id: version
+        run: |
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" = "master" ]; then
+            PUBLISH_VERSION="${BASE_VERSION}"
+          else
+            SANITIZED_BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's|[^a-zA-Z0-9]|-|g' | tr '[:upper:]' '[:lower:]')
+            PUBLISH_VERSION="${BASE_VERSION}-${SANITIZED_BRANCH}.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "PUBLISH_VERSION=${PUBLISH_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${PUBLISH_VERSION}"
+
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          cp -r lib tpls dist/
+          cp runtime.js runtime.d.ts README.md CHANGELOG.md LICENSE.md dist/
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+            pkg.version = '${{ steps.version.outputs.PUBLISH_VERSION }}';
+            delete pkg.scripts.devPreinstall;
+            delete pkg.scripts.preinstall;
+            fs.writeFileSync('./dist/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-build
+          path: dist
+          retention-days: 7
+
+  publish:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: package-build
+          path: dist
+
+      - name: Read version from package.json
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./dist/package.json').version")
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Setup Node.js for OIDC publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: |
+          echo "Publishing $PACKAGE_VERSION"
+          cd dist
+
+          if echo "$PACKAGE_VERSION" | grep -qE '\-'; then
+            NPM_TAG="dev"
+          else
+            NPM_TAG="latest"
+          fi
+
+          echo "Publishing with tag: $NPM_TAG"
+          npm publish --tag $NPM_TAG --access public

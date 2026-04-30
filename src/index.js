@@ -211,10 +211,7 @@ export default class OfflinePlugin {
     });
 
     const afterResolveFn = (result, callback) => {
-      // Webpack 5.1.0 adds the `compiler.webpack` property.
-      const isWebpack5 = !!compiler.webpack
-      const createData = isWebpack5 ? result.createData : result;
-
+      const createData = result.createData;
       const resource = path.resolve(compiler.context, createData.resource);
 
       if (resource === runtimePath) {
@@ -232,11 +229,7 @@ export default class OfflinePlugin {
         });
       }
 
-      if (isWebpack5) {
-        callback();
-      } else {
-        callback(null, result);
-      }
+      callback();
     };
 
     const makeFn = (compilation, callback) => {
@@ -258,14 +251,13 @@ export default class OfflinePlugin {
       });
     };
 
-    const emitFn = (compilation, callback) => {
-      const runtimeTemplatePath = path.resolve(__dirname, '../tpls/runtime-template.js');
-      let hasRuntime = true;
-
-      if (compilation.fileDependencies.indexOf) {
-        hasRuntime = compilation.fileDependencies.indexOf(runtimeTemplatePath) !== -1;
-      } else if (compilation.fileDependencies.has) {
-        hasRuntime = compilation.fileDependencies.has(runtimeTemplatePath);
+    const processAssetsFn = (compilation, callback) => {
+      let hasRuntime = false;
+      for (const module of compilation.modules) {
+        if (module.resource === runtimePath) {
+          hasRuntime = true;
+          break;
+        }
       }
 
       if (!hasRuntime && !this.__tests.ignoreRuntime) {
@@ -275,8 +267,6 @@ export default class OfflinePlugin {
         callback();
         return;
       }
-
-      const stats = compilation.getStats().toJson();
 
       // By some reason errors raised here are not fatal,
       // so we need manually try..catch and exit with error
@@ -288,9 +278,6 @@ export default class OfflinePlugin {
         this.hash = loaderUtils.getHashDigest(
           Object.keys(this.hashesMap).join(''), 'sha1'
         );
-
-        // Not used yet
-        // this.setNetworkOptions();
       } catch (e) {
         callback(e);
         return;
@@ -305,23 +292,22 @@ export default class OfflinePlugin {
       });
     };
 
-    if (compiler.hooks) {
-      const plugin = { name: 'OfflinePlugin' };
+    const plugin = { name: 'OfflinePlugin' };
 
-      compiler.hooks.normalModuleFactory.tap(plugin, (nmf) => {
-        nmf.hooks.afterResolve.tapAsync(plugin, afterResolveFn);
+    compiler.hooks.normalModuleFactory.tap(plugin, (nmf) => {
+      nmf.hooks.afterResolve.tapAsync(plugin, afterResolveFn);
+    });
+
+    compiler.hooks.make.tapAsync(plugin, makeFn);
+
+    compiler.hooks.thisCompilation.tap(plugin, (compilation) => {
+      compilation.hooks.processAssets.tapAsync({
+        name: plugin.name,
+        stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_SUMMARIZE,
+      }, (assets, callback) => {
+        processAssetsFn(compilation, callback);
       });
-
-      compiler.hooks.make.tapAsync(plugin, makeFn);
-      compiler.hooks.emit.tapAsync(plugin, emitFn);
-    } else {
-      compiler.plugin('normal-module-factory', (nmf) => {
-        nmf.plugin('after-resolve', afterResolveFn);
-      });
-
-      compiler.plugin('make', makeFn);
-      compiler.plugin('emit', emitFn);
-    }
+    });
   }
 
   setAssets(compilation) {

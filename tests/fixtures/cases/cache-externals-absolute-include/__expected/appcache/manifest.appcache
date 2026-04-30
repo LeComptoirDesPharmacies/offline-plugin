@@ -1,0 +1,9 @@
+CACHE MANIFEST
+#ver:05fb41a4f702e48b4783ed9ca9327d33bc531b51
+
+CACHE:
+../main.js
+https://fonts.googleapis.com/css?family=Montserrat:400,700
+
+NETWORK:
+*

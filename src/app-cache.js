@@ -1,4 +1,4 @@
-import { getSource, pathToBase, isAbsoluteURL, isAbsolutePath } from './misc/utils';
+import { pathToBase, isAbsoluteURL, isAbsolutePath } from './misc/utils';
 
 import fs from 'fs';
 import path from 'path';
@@ -63,8 +63,9 @@ export default class AppCache {
     const content = this.getPageContent();
     const page = this.getPageTemplate(this.name, content);
 
-    compilation.assets[path + '.appcache'] = getSource(manifest);
-    compilation.assets[path + '.html'] = getSource(page);
+    const { RawSource } = compiler.webpack.sources;
+    compilation.emitAsset(path + '.appcache', new RawSource(manifest));
+    compilation.emitAsset(path + '.html', new RawSource(page));
   }
 
   getManifestTemplate(cache, plugin) {
