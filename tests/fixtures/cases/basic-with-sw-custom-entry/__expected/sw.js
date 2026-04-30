@@ -220,13 +220,16 @@ function WebpackServiceWorker(params, helpers) {
 
       var movedResponses = Promise.all(moved.map(function (pair) {
         return lastCache.match(pair[0]).then(function (response) {
-          return [pair[1], response];
+          // Drop entries that vanished from the old cache between keys() and
+          // match() (browser quota eviction, manual deletion, ...). Otherwise
+          // cache.put(url, undefined) below throws and breaks SW install.
+          return response ? [pair[1], response] : null;
         });
       }));
 
       return caches.open(CACHE_NAME).then(function (cache) {
         var move = movedResponses.then(function (responses) {
-          return Promise.all(responses.map(function (pair) {
+          return Promise.all(responses.filter(Boolean).map(function (pair) {
             return cache.put(pair[0], pair[1]);
           }));
         });
@@ -635,47 +638,41 @@ function WebpackServiceWorker(params, helpers) {
       }));
     }
 
+    // Pair each fetch with its cache.put so the response body is consumed as
+    // soon as it arrives. Otherwise Chrome's network layer holds unread
+    // bodies in a per-origin buffer and stalls when many requests are in
+    // flight, leaving the SW stuck in "trying to install" until the install
+    // event times out (NekR/offline-plugin#486).
+    //
+    // Partial state on failAll failure is self-healing: the next install of
+    // the same version overwrites it, and the activate hook of any future
+    // version deletes any leftover orphan cache — so no rollback needed.
     return Promise.all(requests.map(function (request) {
       if (bustValue) {
         request = applyCacheBust(request, bustValue);
       }
 
-      return fetch(request, requestInit).then(fixRedirectedResponse).then(function (response) {
-        if (!response.ok) {
+      return fetch(request, requestInit).then(fixRedirectedResponse, function () {
+        return null;
+      }).then(function (response) {
+        if (!response || !response.ok) {
           return { error: true };
         }
 
-        return { response: response };
-      }, function () {
-        return { error: true };
+        return deleting.then(function () {
+          return cache.put(request, response);
+        }).then(function () {
+          return { success: true };
+        }, function () {
+          return { error: true };
+        });
       });
-    })).then(function (responses) {
-      if (failAll && responses.some(function (data) {
+    })).then(function (results) {
+      if (failAll && results.some(function (data) {
         return data.error;
       })) {
         return Promise.reject(new Error('Wrong response status'));
       }
-
-      if (!failAll) {
-        responses = responses.filter(function (data, i) {
-          if (!data.error) {
-            return true;
-          }
-
-          requests.splice(i, 1);
-          return false;
-        });
-      }
-
-      return deleting.then(function () {
-        var addAll = responses.map(function (_ref, i) {
-          var response = _ref.response;
-
-          return cache.put(requests[i], response);
-        });
-
-        return Promise.all(addAll);
-      });
     });
   }
 
