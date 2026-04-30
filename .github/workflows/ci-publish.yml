@@ -1,21 +1,44 @@
 name: CI / Publish
 
+# Single workflow because npm Trusted Publishers only allows one workflow
+# filename to be registered per package.
+#
+# Three flows in this file, gated by event type:
+#   - pull_request:      build + tests, no publish.
+#   - push (bugfix/feature branches): build + tests + publish prerelease
+#                        (`<base>-<branch>.<run>`) under the `dev` dist-tag.
+#   - workflow_dispatch: bump version on master, tag, push, build + tests,
+#                        publish under `latest` (or `dev` if version contains
+#                        a hyphen, e.g. 6.0.0-rc.1).
 on:
   push:
     branches:
-      - master
       - 'bugfix/**'
       - 'feature/**'
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump: patch | minor | major | prerelease, or an explicit version (e.g. 6.0.0, 6.0.0-rc.1).'
+        required: true
+        default: 'patch'
+        type: string
+      dry_run:
+        description: 'Run tests + build but do not push or publish.'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  # PR validation + prerelease build for in-progress branches.
   build:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,12 +68,8 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(node -p "require('./package.json').version")
-          if [ "${GITHUB_REF_NAME}" = "master" ]; then
-            PUBLISH_VERSION="${BASE_VERSION}"
-          else
-            SANITIZED_BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's|[^a-zA-Z0-9]|-|g' | tr '[:upper:]' '[:lower:]')
-            PUBLISH_VERSION="${BASE_VERSION}-${SANITIZED_BRANCH}.${GITHUB_RUN_NUMBER}"
-          fi
+          SANITIZED_BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's|[^a-zA-Z0-9]|-|g' | tr '[:upper:]' '[:lower:]')
+          PUBLISH_VERSION="${BASE_VERSION}-${SANITIZED_BRANCH}.${GITHUB_RUN_NUMBER}"
           echo "PUBLISH_VERSION=${PUBLISH_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Resolved version: ${PUBLISH_VERSION}"
 
@@ -69,13 +88,15 @@ jobs:
           "
 
       - name: Upload build artifact
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: package-build
           path: dist
           retention-days: 7
 
-  publish:
+  # Publish a prerelease for `bugfix/**` / `feature/**` branches.
+  prerelease:
     needs: build
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -97,16 +118,100 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Publish to npm
+      - name: Publish prerelease to npm
+        # Branches always produce prerelease versions, so always publish
+        # under the `dev` dist-tag. Stable `latest` releases come from the
+        # `release` job below.
         run: |
-          echo "Publishing $PACKAGE_VERSION"
           cd dist
+          echo "Publishing $PACKAGE_VERSION with tag: dev"
+          npm publish --tag dev --access public
 
+  # Manual stable release. Triggered from the GitHub Actions UI.
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fixture tests
+        run: pnpm run test:fixtures
+
+      - name: Build lib/
+        run: pnpm run build
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and create tag
+        id: bump
+        run: |
+          # `npm version` bumps package.json AND creates a git tag in one
+          # atomic operation, guaranteeing the two never drift.
+          NEW_VERSION=$(npm version "${{ inputs.version }}" -m "Release %s")
+          echo "NEW_VERSION=${NEW_VERSION#v}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to ${NEW_VERSION}"
+
+      - name: Push commit and tag
+        if: ${{ !inputs.dry_run }}
+        # `--follow-tags` pushes the tag and commit atomically (tag is
+        # reachable from the new commit), avoiding half-pushed state.
+        run: git push --follow-tags origin master
+
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          cp -r lib tpls dist/
+          cp runtime.js runtime.d.ts README.md CHANGELOG.md LICENSE.md dist/
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+            delete pkg.scripts.devPreinstall;
+            delete pkg.scripts.preinstall;
+            fs.writeFileSync('./dist/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cd dist
+          PACKAGE_VERSION="${{ steps.bump.outputs.NEW_VERSION }}"
+          # Anything containing a hyphen is a prerelease (e.g. 6.0.0-rc.1)
+          # and gets the `dev` dist-tag. Stable versions get `latest`.
           if echo "$PACKAGE_VERSION" | grep -qE '\-'; then
             NPM_TAG="dev"
           else
             NPM_TAG="latest"
           fi
+          echo "Publishing $PACKAGE_VERSION with tag: $NPM_TAG"
+          npm publish --tag "$NPM_TAG" --access public
 
-          echo "Publishing with tag: $NPM_TAG"
-          npm publish --tag $NPM_TAG --access public
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "::notice::Dry run — would have published ${{ steps.bump.outputs.NEW_VERSION }}. No push, no publish performed."
