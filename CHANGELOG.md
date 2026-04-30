@@ -10,6 +10,7 @@
 
 ### Unreleased
 
+* Add Rspack compatibility: replace `afterResolve` hook with a static module rule for runtime loader injection. Rspack ignores `createData.loaders` mutations in `afterResolve`, but static rules work in both webpack 5 and Rspack.
 * **BREAKING**: dropped `webpack@4` support. The plugin now requires `webpack@5` (or rspack). The legacy `compiler.plugin(...)` / `compiler.hooks.emit` / `compilation.cache` / direct `compilation.assets[x] =` code paths have been removed.
 * **BREAKING**: removed the `ServiceWorker.minify` option. Service-worker minification now follows the host bundler's `optimization.minimize` setting — whichever minifier the user configures (terser-webpack-plugin, swc-rspack, esbuild, …) naturally minifies the SW asset like any other JS asset. To skip SW minification while minifying the rest of the bundle, exclude it via the minimizer's `exclude` option. The `lib/misc/get-minification-plugin` module has been removed.
 * Fix [#5](https://github.com/LeComptoirDesPharmacies/offline-plugin/issues/5): removed the `Compilation.cache` deprecation warning and the "modifying assets after sealing" warning under webpack 5. The plugin now hooks into `compilation.hooks.processAssets` (`PROCESS_ASSETS_STAGE_SUMMARIZE`) and uses `emitAsset` / `deleteAsset` / `getAsset` with `compiler.webpack.sources.RawSource`.
