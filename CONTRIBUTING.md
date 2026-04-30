@@ -24,10 +24,16 @@ Project structure:
 
 Before submitting a PR you have to run `pnpm run build` to transpile scripts from `src/` to `lib/` (also you can use `pnpm run watch`). Also make sure to run `pnpm test` before you perform any changes, to not break other things.
 
-If you are adding a new feature, make sure to write tests for it
+If you are adding a new feature, make sure to write tests for it.
+
+If your change is user-visible, add an entry under `### Unreleased` at the top of `CHANGELOG.md`. Don't worry about the version number — the release workflow renames that heading automatically.
 
 ## Writing tests
 
-Tests are located in `tests/legacy/fixtures` folder. Right now it's only webpack generated code fixtures, no ServiceWorker tests yet. Just copy most similar to your case test (e.g. `basic`) and adopt it for the new feature.
+Tests are located in `tests/fixtures/cases` folder. Right now it's only webpack generated code fixtures, no ServiceWorker tests yet. Just copy most similar to your case test (e.g. `basic`) and adopt it for the new feature.
+
+## Releasing
+
+See [`RELEASING.md`](./RELEASING.md) for the prerelease (automatic on push to `bugfix/**`/`feature/**`) and stable release (manual via GitHub Actions) flows.
 
 ## Thank you!

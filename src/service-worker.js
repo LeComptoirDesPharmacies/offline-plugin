@@ -1,8 +1,6 @@
-import { makeMinificationPlugin, isMinificationPlugin } from './misc/get-minification-plugin';
 import path from 'path';
-import deepExtend from 'deep-extend';
 import {
-  getSource, pathToBase, isAbsoluteURL,
+  pathToBase, isAbsoluteURL,
   isAbsolutePath, functionToString
 } from './misc/utils';
 
@@ -15,7 +13,6 @@ export default class ServiceWorker {
       );
     }
 
-    this.minify = options.minify;
     this.output = options.output.replace(/^\.\/+/, '');
     this.publicPath = options.publicPath;
 
@@ -43,13 +40,18 @@ export default class ServiceWorker {
     this.SW_DATA_VAR = '__wpo';
   }
 
+  // The asset name produced by the child compilation, ending in `.js` so the
+  // host webpack/rspack minifier picks it up like any other JS asset.
+  getEntryAssetName(plugin) {
+    return plugin.entryPrefix + this.ENTRY_NAME + '.js';
+  }
+
   addEntry(plugin, compilation, compiler) {
     if (!this.entry) return Promise.resolve();
 
     const name = plugin.entryPrefix + this.ENTRY_NAME;
     const childCompiler = compilation.createChildCompiler(name, {
-      // filename: this.output
-      filename: name
+      filename: this.getEntryAssetName(plugin)
     });
 
     const data = JSON.stringify({
@@ -66,78 +68,6 @@ export default class ServiceWorker {
     const { EntryPlugin } = compiler.webpack;
     new EntryPlugin(compiler.context, entry, name).apply(childCompiler);
 
-    const optimization = compiler.options.optimization || {};
-
-    const uglifyOptions = {
-      compress: {
-        warnings: false,
-        dead_code: true,
-        drop_console: true,
-        unused: true
-      },
-
-      output: {
-        comments: false
-      }
-    };
-
-    if (this.minify === true) {
-      if (makeMinificationPlugin == null) {
-        throw new Error('OfflinePlugin: uglifyjs-webpack-plugin or terser-webpack-plugin is required to preform a minification')
-      }
-
-      const options = {
-        test: new RegExp(name),
-        uglifyOptions,
-      };
-
-      makeMinificationPlugin(options).apply(childCompiler);
-    } else if (
-      (this.minify !== false || optimization.minimize) && makeMinificationPlugin
-    ) {
-      // Do not perform auto-minification if MinificationPlugin isn't installed
-
-      const added = ((optimization.minimize && optimization.minimizer) || [])
-      .concat(compiler.options.plugins || []).some((plugin) => {
-        if (isMinificationPlugin(plugin)) {
-          const options = deepExtend({}, plugin.options);
-
-          options.test = new RegExp(name);
-          makeMinificationPlugin(options).apply(childCompiler);
-
-          return true;
-        }
-      });
-
-      if (!added && optimization.minimize) {
-        const options = {
-          test: new RegExp(name),
-          uglifyOptions,
-        };
-
-        makeMinificationPlugin(options).apply(childCompiler);
-      }
-    }
-
-    // Needed for HMR. offline-plugin doesn't support it,
-    // but added just in case to prevent other errors
-    const compilationFn = (compilation) => {
-      if (compilation.cache) {
-        if (!compilation.cache[name]) {
-          compilation.cache[name] = {};
-        }
-
-        compilation.cache = compilation.cache[name];
-      }
-    };
-
-    if (childCompiler.hooks) {
-      const plugin = { name: 'OfflinePlugin' };
-      childCompiler.hooks.compilation.tap(plugin, compilationFn);
-    } else {
-      childCompiler.plugin('compilation', compilationFn);
-    }
-
     return new Promise((resolve, reject) => {
       childCompiler.runAsChild((err, entries, childCompilation) => {
         if (err) {
@@ -151,26 +81,11 @@ export default class ServiceWorker {
   }
 
   apply(plugin, compilation, compiler) {
-    let minify;
-
-    if (typeof this.minify === 'boolean') {
-      minify = this.minify;
-    } else {
-      minify = makeMinificationPlugin && (
-        !!(
-          compiler.options.optimization &&
-          compiler.options.optimization.minimize
-        ) || !!(
-          (compiler.options.plugins || []).some(isMinificationPlugin)
-        )
-      );
-    }
-
-    let source = this.getDataTemplate(plugin.caches, plugin, minify);
+    let source = this.getDataTemplate(plugin.caches, plugin);
 
     if (this.entry) {
-      const name = plugin.entryPrefix + this.ENTRY_NAME;
-      const asset = compilation.assets[name];
+      const filename = this.getEntryAssetName(plugin);
+      const asset = compilation.getAsset(filename);
 
       if (!asset) {
         compilation.errors.push(
@@ -180,17 +95,18 @@ export default class ServiceWorker {
         return;
       }
 
-      delete compilation.assets[name];
+      compilation.deleteAsset(filename);
 
       if (!plugin.__tests.swMetadataOnly) {
-        source += '\n\n' + asset.source();
+        source += '\n\n' + asset.source.source();
       }
     }
 
-    compilation.assets[this.output] = getSource(source);
+    const { RawSource } = compiler.webpack.sources;
+    compilation.emitAsset(this.output, new RawSource(source));
   }
 
-  getDataTemplate(data, plugin, minify) {
+  getDataTemplate(data, plugin) {
     const rewriteFunction = this.pathRewrite;
 
     const cache = (key) => {
@@ -238,7 +154,7 @@ export default class ServiceWorker {
         alwaysRevalidate: plugin.alwaysRevalidate,
         preferOnline: plugin.preferOnline,
         ignoreSearch: plugin.ignoreSearch,
-      }, null, minify ? void 0 : '  ') };
+      }) };
     `.trim();
   }
 
