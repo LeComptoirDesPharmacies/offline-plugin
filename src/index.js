@@ -210,27 +210,24 @@ export default class OfflinePlugin {
       this.resolveToolPaths(tool, key, compiler);
     });
 
-    const afterResolveFn = (result, callback) => {
-      const createData = result.createData;
-      const resource = path.resolve(compiler.context, createData.resource);
-
-      if (resource === runtimePath) {
-        const data = {
-          autoUpdate: this.autoUpdate
-        };
-
-        this.useTools((tool, key) => {
-          data[key] = tool.getConfig(this);
-        });
-
-        createData.loaders.push({
-          loader: path.join(__dirname, 'misc/runtime-loader.js'),
-          options: JSON.stringify(data)
-        });
-      }
-
-      callback();
+    // Register runtime loader as a static module rule instead of injecting
+    // via afterResolve hook. Rspack ignores createData.loaders mutations
+    // in afterResolve, but static rules work in both webpack and Rspack.
+    const data = {
+      autoUpdate: this.autoUpdate
     };
+
+    this.useTools((tool, key) => {
+      data[key] = tool.getConfig(this);
+    });
+
+    compiler.options.module.rules.push({
+      test: runtimePath,
+      use: [{
+        loader: path.join(__dirname, 'misc/runtime-loader.js'),
+        options: JSON.stringify(data)
+      }]
+    });
 
     const makeFn = (compilation, callback) => {
       if (this.warnings.length) {
@@ -293,10 +290,6 @@ export default class OfflinePlugin {
     };
 
     const plugin = { name: 'OfflinePlugin' };
-
-    compiler.hooks.normalModuleFactory.tap(plugin, (nmf) => {
-      nmf.hooks.afterResolve.tapAsync(plugin, afterResolveFn);
-    });
 
     compiler.hooks.make.tapAsync(plugin, makeFn);
 
