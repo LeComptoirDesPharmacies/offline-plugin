@@ -6,6 +6,10 @@
 
 var appCacheIframe;
 
+// Defined by `install(options)` so that `update()` / `applyUpdate()` can
+// forward errors to the user's callbacks. No-op until `install()` is called.
+var sendEvent = function() {};
+
 function hasSW() {
   
     return 'serviceWorker' in navigator && (
@@ -19,6 +23,14 @@ function hasSW() {
 function install(options) {
   options || (options = {});
 
+  sendEvent = function(event, error) {
+    if (typeof options[event] !== 'function') return;
+
+    var payload = { source: 'ServiceWorker' };
+    if (error) payload.error = error;
+    options[event](payload);
+  };
+
   
     if (hasSW()) {
       var registration = navigator.serviceWorker
@@ -30,6 +42,24 @@ function install(options) {
         );
 
       
+
+      registration.then(function(reg) {
+        // WTF no reg?
+        if (!reg) return;
+
+        // Installed but Shift-Reloaded (page is not controller by SW),
+        // update might be ready at this point (more than one tab opened).
+        // Anyway, if page is hard-reloaded, then it probably already have latest version
+        // but it's not controlled by SW yet. Applying update will claim this page
+        // to be controlled by SW. Maybe set flag to not reload it?
+        // if (!navigator.serviceWorker.controller) return;
+
+        
+      }).catch(function(err) {
+        // Forward registration failures to options.onError; also prevents
+        // unhandled promise rejections when no callback is set.
+        sendEvent('onError', err);
+      });
 
       return;
     }
@@ -76,6 +106,14 @@ function update() {
       navigator.serviceWorker.getRegistration().then(function(registration) {
         if (!registration) return;
         return registration.update();
+      }).catch(function(err) {
+        // registration.update() rejects when the browser cannot fetch the SW
+        // script (network error, redirect on the script source, ...). Forward
+        // to options.onError so callers can react; also prevents the
+        // rejection from surfacing as an unhandled promise rejection.
+        // Note: browser-initiated update checks (every 24h or on navigation)
+        // cannot be intercepted from JS — only explicit update() calls.
+        sendEvent('onError', err);
       });
     }
   
