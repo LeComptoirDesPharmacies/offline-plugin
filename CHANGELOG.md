@@ -15,6 +15,15 @@
 * Fix [#5](https://github.com/LeComptoirDesPharmacies/offline-plugin/issues/5): removed the `Compilation.cache` deprecation warning and the "modifying assets after sealing" warning under webpack 5. The plugin now hooks into `compilation.hooks.processAssets` (`PROCESS_ASSETS_STAGE_SUMMARIZE`) and uses `emitAsset` / `deleteAsset` / `getAsset` with `compiler.webpack.sources.RawSource`.
 * Fix [#6](https://github.com/LeComptoirDesPharmacies/offline-plugin/issues/6) / upstream [NekR/offline-plugin#486](https://github.com/NekR/offline-plugin/issues/486): the SW runtime no longer gets stuck in "trying to install" on apps with many assets. Previously `addAllNormalized` collected all `Response` objects via `Promise.all([fetch, fetch, …])` and only called `cache.put` after every fetch had resolved, which left response bodies unconsumed in Chrome's per-origin network buffer and stalled additional fetches indefinitely. Each fetch is now paired with its `cache.put` so the body is consumed as it arrives.
 * Fix: SW install no longer crashes during the `'changed'` update strategy when an entry the plugin expected to "move" from the previous version's cache has vanished (browser quota eviction, manual deletion, …). `lastCache.match()` returning `undefined` would feed `cache.put(url, undefined)` and throw `TypeError`. Missing entries are now skipped — they will be re-fetched from the network on first request after activation.
+* Fix [#11](https://github.com/LeComptoirDesPharmacies/offline-plugin/issues/11): runtime no longer leaks unhandled promise rejections from `update()` / `applyUpdate()` / `register()`. Errors from these calls (e.g., redirect on the SW script source, network failure, missing waiting worker) are now forwarded to `options.onError` with the actual error attached as `error: <Error>` on the event payload. Note: browser-initiated SW update checks (every 24h or on navigation) cannot be intercepted from JS by design — only explicit `update()` calls are now covered.
+* **Behavior change**: after firing `options.onError`, the runtime no longer re-throws via `return Promise.reject(err)`. Previously the registration `.catch` called `onError` *and* re-rejected, which surfaced as an `Uncaught (in promise)` in the console plus an extra `unhandledrejection` event — i.e. the same error was reported twice (once via the explicit callback the user wired up, once via global error machinery), without context the second time. The new contract is: if you registered `onError`, the runtime trusts you to handle it and stays quiet. To restore the previous behavior, throw from your handler:
+    ```js
+    runtime.install({
+      onError: function(e) {
+        throw e.error; // re-surface as an unhandledrejection if you want it
+      }
+    });
+    ```
 
 ### 5.1.1
 

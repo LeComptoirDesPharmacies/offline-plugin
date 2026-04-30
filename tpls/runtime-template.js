@@ -1,5 +1,9 @@
 var appCacheIframe;
 
+// Defined by `install(options)` so that `update()` / `applyUpdate()` can
+// forward errors to the user's callbacks. No-op until `install()` is called.
+var sendEvent = function() {};
+
 function hasSW() {
   <% if (typeof ServiceWorker === 'object' && ServiceWorker.force) { %>
     // Forced install
@@ -15,6 +19,14 @@ function hasSW() {
 
 function install(options) {
   options || (options = {});
+
+  sendEvent = function(event, error) {
+    if (typeof options[event] !== 'function') return;
+
+    var payload = { source: 'ServiceWorker' };
+    if (error) payload.error = error;
+    options[event](payload);
+  };
 
   <% if (typeof ServiceWorker !== 'undefined') { %>
     if (hasSW()) {
@@ -108,35 +120,30 @@ function install(options) {
             }
           }
         };
+      <% } %>
 
-        var sendEvent = function(event) {
-          if (typeof options[event] === 'function') {
-            options[event]({
-              source: 'ServiceWorker'
-            });
-          }
-        };
+      registration.then(function(reg) {
+        // WTF no reg?
+        if (!reg) return;
 
-        registration.then(function(reg) {
-          // WTF no reg?
-          if (!reg) return;
+        // Installed but Shift-Reloaded (page is not controller by SW),
+        // update might be ready at this point (more than one tab opened).
+        // Anyway, if page is hard-reloaded, then it probably already have latest version
+        // but it's not controlled by SW yet. Applying update will claim this page
+        // to be controlled by SW. Maybe set flag to not reload it?
+        // if (!navigator.serviceWorker.controller) return;
 
-          // Installed but Shift-Reloaded (page is not controller by SW),
-          // update might be ready at this point (more than one tab opened).
-          // Anyway, if page is hard-reloaded, then it probably already have latest version
-          // but it's not controlled by SW yet. Applying update will claim this page
-          // to be controlled by SW. Maybe set flag to not reload it?
-          // if (!navigator.serviceWorker.controller) return;
-
+        <% if (ServiceWorker.events) { %>
           handleUpdating(reg);
           reg.onupdatefound = function() {
             handleUpdating(reg);
           };
-        }).catch(function(err) {
-          sendEvent('onError');
-          return Promise.reject(err);
-        });
-      <% } %>
+        <% } %>
+      }).catch(function(err) {
+        // Forward registration failures to options.onError; also prevents
+        // unhandled promise rejections when no callback is set.
+        sendEvent('onError', err);
+      });
 
       return;
     }
@@ -199,6 +206,9 @@ function applyUpdate(callback, errback) {
         });
 
         callback && callback();
+      }).catch(function(err) {
+        sendEvent('onError', err);
+        errback && errback(err);
       });
 
       return;
@@ -223,6 +233,14 @@ function update() {
       navigator.serviceWorker.getRegistration(<%- JSON.stringify(ServiceWorker.scope) %>).then(function(registration) {
         if (!registration) return;
         return registration.update();
+      }).catch(function(err) {
+        // registration.update() rejects when the browser cannot fetch the SW
+        // script (network error, redirect on the script source, ...). Forward
+        // to options.onError so callers can react; also prevents the
+        // rejection from surfacing as an unhandled promise rejection.
+        // Note: browser-initiated update checks (every 24h or on navigation)
+        // cannot be intercepted from JS — only explicit update() calls.
+        sendEvent('onError', err);
       });
     }
   <% } %>
