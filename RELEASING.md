@@ -3,20 +3,32 @@
 `@lcdp/offline-plugin` is published to npm by GitHub Actions
 (`.github/workflows/ci-publish.yml`). There are two flows.
 
-## Prerelease (automatic on push to `bugfix/**` / `feature/**`)
+## Prereleases (automatic on push)
 
-Every push to a branch matching `bugfix/**` or `feature/**` builds, runs the
-fixture tests, and publishes a prerelease to npm under the `dev` dist-tag. The
-version string is derived as `<base>-<sanitized-branch>.<run-number>` — for
-example, a push on `bugfix/5` while `package.json` is at `5.1.7` and the run
-number is `42` produces `5.1.7-bugfix-5.42`.
+Every push triggers a prerelease publish, with the dist-tag chosen by the
+branch:
 
-Consumers who want to test the in-progress branch can install with:
+| Branch                 | Version pattern                       | npm dist-tag |
+|------------------------|---------------------------------------|--------------|
+| `master`               | `<base>-next.<run>`                   | `next`       |
+| `bugfix/**`, `feature/**` | `<base>-<sanitized-branch>.<run>` | `dev`        |
+
+`<base>` is the current `version` field of `package.json`, `<run>` is the
+GitHub Actions run number (monotonic per repo).
+
+Examples (with `package.json` at `5.1.7` and run number `42`):
+- Push to `master` → `5.1.7-next.42` published with tag `next`
+- Push to `bugfix/5` → `5.1.7-bugfix-5.42` published with tag `dev`
+
+Consumers can pull either:
 
 ```bash
+# latest master state
+npm install @lcdp/offline-plugin@next
+# any in-progress branch
 npm install @lcdp/offline-plugin@dev
-# or pin to the exact version
-npm install @lcdp/offline-plugin@5.1.7-bugfix-5.42
+# pin to a specific build
+npm install @lcdp/offline-plugin@5.1.7-next.42
 ```
 
 PRs targeting `master` only run build + tests; nothing is published.

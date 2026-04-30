@@ -3,16 +3,20 @@ name: CI / Publish
 # Single workflow because npm Trusted Publishers only allows one workflow
 # filename to be registered per package.
 #
-# Three flows in this file, gated by event type:
-#   - pull_request:      build + tests, no publish.
-#   - push (bugfix/feature branches): build + tests + publish prerelease
-#                        (`<base>-<branch>.<run>`) under the `dev` dist-tag.
-#   - workflow_dispatch: bump version on master, tag, push, build + tests,
-#                        publish under `latest` (or `dev` if version contains
-#                        a hyphen, e.g. 6.0.0-rc.1).
+# Four flows in this file, gated by event type:
+#   - pull_request:        build + tests, no publish.
+#   - push to master:      build + tests + publish prerelease
+#                          (`<base>-next.<run>`) under the `next` dist-tag.
+#                          Reflects the latest unreleased state of master.
+#   - push to bugfix/feature branches: build + tests + publish prerelease
+#                          (`<base>-<branch>.<run>`) under the `dev` dist-tag.
+#   - workflow_dispatch:   bump version on master, tag, push, build + tests,
+#                          publish under `latest` (or `dev` if version contains
+#                          a hyphen, e.g. 6.0.0-rc.1).
 on:
   push:
     branches:
+      - master
       - 'bugfix/**'
       - 'feature/**'
   pull_request:
@@ -36,10 +40,12 @@ permissions:
   contents: read
 
 jobs:
-  # PR validation + prerelease build for in-progress branches.
+  # PR validation + prerelease build for master and in-progress branches.
   build:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    outputs:
+      npm_tag: ${{ steps.version.outputs.NPM_TAG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,10 +74,19 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(node -p "require('./package.json').version")
-          SANITIZED_BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's|[^a-zA-Z0-9]|-|g' | tr '[:upper:]' '[:lower:]')
-          PUBLISH_VERSION="${BASE_VERSION}-${SANITIZED_BRANCH}.${GITHUB_RUN_NUMBER}"
+          if [ "${GITHUB_REF_NAME}" = "master" ]; then
+            # Latest unreleased state of master, served under the `next` tag.
+            PUBLISH_VERSION="${BASE_VERSION}-next.${GITHUB_RUN_NUMBER}"
+            NPM_TAG="next"
+          else
+            # In-progress branch builds, served under the `dev` tag.
+            SANITIZED_BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's|[^a-zA-Z0-9]|-|g' | tr '[:upper:]' '[:lower:]')
+            PUBLISH_VERSION="${BASE_VERSION}-${SANITIZED_BRANCH}.${GITHUB_RUN_NUMBER}"
+            NPM_TAG="dev"
+          fi
           echo "PUBLISH_VERSION=${PUBLISH_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: ${PUBLISH_VERSION}"
+          echo "NPM_TAG=${NPM_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${PUBLISH_VERSION} (tag: ${NPM_TAG})"
 
       - name: Assemble dist/
         run: |
@@ -95,11 +110,13 @@ jobs:
           path: dist
           retention-days: 7
 
-  # Publish a prerelease for `bugfix/**` / `feature/**` branches.
+  # Publish prerelease — `next` tag for master, `dev` tag for branches.
   prerelease:
     needs: build
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      NPM_TAG: ${{ needs.build.outputs.npm_tag }}
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -119,13 +136,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish prerelease to npm
-        # Branches always produce prerelease versions, so always publish
-        # under the `dev` dist-tag. Stable `latest` releases come from the
-        # `release` job below.
         run: |
           cd dist
-          echo "Publishing $PACKAGE_VERSION with tag: dev"
-          npm publish --tag dev --access public
+          echo "Publishing $PACKAGE_VERSION with tag: $NPM_TAG"
+          npm publish --tag "$NPM_TAG" --access public
 
   # Manual stable release. Triggered from the GitHub Actions UI.
   release:
