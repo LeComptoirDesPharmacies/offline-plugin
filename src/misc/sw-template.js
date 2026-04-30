@@ -178,13 +178,16 @@ function WebpackServiceWorker(params, helpers) {
 
       const movedResponses = Promise.all(moved.map((pair) => {
         return lastCache.match(pair[0]).then((response) => {
-          return [pair[1], response];
-        })
+          // Drop entries that vanished from the old cache between keys() and
+          // match() (browser quota eviction, manual deletion, ...). Otherwise
+          // cache.put(url, undefined) below throws and breaks SW install.
+          return response ? [pair[1], response] : null;
+        });
       }));
 
       return caches.open(CACHE_NAME).then((cache) => {
         const move = movedResponses.then((responses) => {
-          return Promise.all(responses.map((pair) => {
+          return Promise.all(responses.filter(Boolean).map((pair) => {
             return cache.put(pair[0], pair[1]);
           }));
         });
@@ -602,40 +605,36 @@ function WebpackServiceWorker(params, helpers) {
       }));
     }
 
+    // Pair each fetch with its cache.put so the response body is consumed as
+    // soon as it arrives. Otherwise Chrome's network layer holds unread
+    // bodies in a per-origin buffer and stalls when many requests are in
+    // flight, leaving the SW stuck in "trying to install" until the install
+    // event times out (NekR/offline-plugin#486).
+    //
+    // Partial state on failAll failure is self-healing: the next install of
+    // the same version overwrites it, and the activate hook of any future
+    // version deletes any leftover orphan cache — so no rollback needed.
     return Promise.all(requests.map((request) => {
       if (bustValue) {
         request = applyCacheBust(request, bustValue);
       }
 
       return fetch(request, requestInit)
-        .then(fixRedirectedResponse).then((response) => {
-          if (!response.ok) {
+        .then(fixRedirectedResponse, () => null)
+        .then((response) => {
+          if (!response || !response.ok) {
             return { error: true };
           }
 
-          return { response };
-        }, () => ({ error: true }));
-    })).then((responses) => {
-      if (failAll && responses.some(data => data.error)) {
+          return deleting.then(() => cache.put(request, response)).then(
+            () => ({ success: true }),
+            () => ({ error: true })
+          );
+        });
+    })).then((results) => {
+      if (failAll && results.some((data) => data.error)) {
         return Promise.reject(new Error('Wrong response status'));
       }
-
-      if (!failAll) {
-        responses = responses.filter((data, i) => {
-          if (!data.error) { return true; }
-
-          requests.splice(i, 1);
-          return false;
-        });
-      }
-
-      return deleting.then(() => {
-        let addAll = responses.map(({ response }, i) => {
-          return cache.put(requests[i], response);
-        });
-
-        return Promise.all(addAll);
-      });
     });
   }
 
