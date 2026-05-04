@@ -102,4 +102,106 @@ describe.each(['webpack', 'rspack'] as const)('%s — assets resolution', (bundl
     expect(data.externals).toContain('https://cdn.example.com/lib.js');
     expect(data.assets.main).toContain('https://cdn.example.com/lib.js');
   });
+
+  it('distributes assets to additional section', async () => {
+    const config = baseConfig({
+      caches: {
+        main: ['main.js'],
+        additional: [':externals:'],
+      },
+      externals: ['external.js'],
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.assets.main).toHaveLength(1);
+    expect(data.assets.main[0]).toContain('main.js');
+    expect(data.assets.additional.length).toBeGreaterThan(0);
+    expect(data.assets.additional.some((a: string) => a.includes('external.js'))).toBe(true);
+  });
+
+  it('distributes assets to optional section', async () => {
+    const config = baseConfig({
+      caches: {
+        main: ['main.js'],
+        additional: [],
+        optional: ['external.js'],
+      },
+      externals: ['external.js'],
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.assets.optional).toContain('./external.js');
+    expect(data.assets.main).not.toContain('./external.js');
+  });
+
+  it(':externals: distributes remaining externals to a section', async () => {
+    const config = baseConfig({
+      caches: {
+        main: [':rest:'],
+        additional: [':externals:'],
+      },
+      externals: ['https://cdn.example.com/lib.js'],
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.assets.additional).toContain('https://cdn.example.com/lib.js');
+    expect(data.assets.main).not.toContain('https://cdn.example.com/lib.js');
+  });
+
+  it('filters caches with string glob pattern', async () => {
+    const config = baseConfig({
+      caches: { main: ['*.js'] },
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    const allJs = data.assets.main.every((a: string) => a.endsWith('.js'));
+    expect(allJs).toBe(true);
+    expect(data.assets.main.length).toBeGreaterThan(0);
+  });
+
+  it('an asset appears in only one cache section', async () => {
+    const config = baseConfig({
+      caches: {
+        main: ['main.js'],
+        additional: [':rest:'],
+        optional: [':externals:'],
+      },
+      externals: ['https://cdn.example.com/lib.js'],
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+
+    const all = [
+      ...data.assets.main,
+      ...data.assets.additional,
+      ...data.assets.optional,
+    ];
+    const unique = new Set(all);
+    expect(unique.size).toBe(all.length);
+  });
 });
