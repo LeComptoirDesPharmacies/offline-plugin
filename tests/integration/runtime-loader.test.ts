@@ -45,7 +45,7 @@ describe.each(['webpack', 'rspack'] as const)('%s — runtime loader', (bundler:
     expect(result.errors).toHaveLength(0);
 
     const bundle = result.assets['main.js'];
-    expect(bundle).toContain('setInterval');
+    expect(bundle).toMatch(/setInterval\(\w+,\s*5000\)/);
   });
 
   it('includes configured scope in register call', async () => {
@@ -82,8 +82,7 @@ describe.each(['webpack', 'rspack'] as const)('%s — runtime loader', (bundler:
 
     expect(result.errors).toHaveLength(0);
     const bundle = result.assets['main.js'];
-    expect(bundle).toContain('setInterval');
-    expect(bundle).toContain('3600000');
+    expect(bundle).toMatch(/setInterval\(\w+,\s*3600000\)/);
   });
 
   it('does not emit setInterval when autoUpdate is false', async () => {
@@ -137,8 +136,7 @@ describe.each(['webpack', 'rspack'] as const)('%s — runtime loader', (bundler:
 
     expect(result.errors).toHaveLength(0);
     const bundle = result.assets['main.js'];
-    expect(bundle).toContain('setInterval');
-    expect(bundle).toContain('120000');
+    expect(bundle).toMatch(/setInterval\(\w+,\s*120000\)/);
   });
 
   it('injects SW lifecycle event handlers when events is true', async () => {
