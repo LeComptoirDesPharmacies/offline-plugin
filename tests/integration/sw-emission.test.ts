@@ -115,4 +115,81 @@ describe.each(['webpack', 'rspack'] as const)('%s — sw emission', (bundler: Bu
     expect(data.pluginVersion).toBeDefined();
     expect(data.pluginVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
+
+  it('hashesMap maps sha1 hashes to asset paths', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    const hashes = Object.keys(data.hashesMap);
+    expect(hashes.length).toBeGreaterThan(0);
+
+    // Every key should be a hex hash
+    for (const hash of hashes) {
+      expect(hash).toMatch(/^[a-f0-9]+$/);
+    }
+
+    // Every value should be an asset path present in main/additional/optional
+    const allAssets = [
+      ...data.assets.main,
+      ...data.assets.additional,
+      ...data.assets.optional,
+    ];
+    for (const assetPath of Object.values(data.hashesMap)) {
+      expect(allAssets).toContain(assetPath);
+    }
+  });
+
+  it('throws when responseStrategy is invalid', async () => {
+    expect(() => {
+      baseConfig({
+        caches: 'all',
+        version: '[hash]',
+        responseStrategy: 'invalid-strategy',
+        __tests: testFlags,
+      });
+    }).toThrow('responseStrategy');
+  });
+
+  it('supports version as a function', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version(plugin: any) {
+        return 'custom-v-' + plugin.hash.slice(0, 6);
+      },
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.version).toMatch(/^custom-v-[a-f0-9]{6}$/);
+  });
+
+  it('produces identical version hash for identical builds', async () => {
+    const makeConfig = () => baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result1 = await compile(bundler, makeConfig());
+    const result2 = await compile(bundler, makeConfig());
+
+    expect(result1.errors).toHaveLength(0);
+    expect(result2.errors).toHaveLength(0);
+
+    const data1 = extractSwData(result1.assets['sw.js']);
+    const data2 = extractSwData(result2.assets['sw.js']);
+
+    expect(data1.version).toBe(data2.version);
+    expect(data1.hashesMap).toEqual(data2.hashesMap);
+  });
 });
