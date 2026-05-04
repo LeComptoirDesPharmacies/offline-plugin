@@ -83,4 +83,86 @@ describe.each(['webpack', 'rspack'] as const)('%s — paths resolution', (bundle
     const bundle = result.assets['main.js'];
     expect(bundle).toContain('/custom/sw.js');
   });
+
+  it('relative paths rewrite with basePath when SW is in subdirectory', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      relativePaths: true,
+      ServiceWorker: { output: 'offline/sw.js' },
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.assets['offline/sw.js']).toBeDefined();
+
+    const data = extractSwData(result.assets['offline/sw.js']);
+    // basePath should be ../ since SW is one level deep
+    const allPrefixed = data.assets.main.every(
+      (a: string) => a.startsWith('../') || a.startsWith('./')
+    );
+    expect(allPrefixed).toBe(true);
+    // At least one asset should use ../ to go up
+    const hasParentRef = data.assets.main.some((a: string) => a.startsWith('../'));
+    expect(hasParentRef).toBe(true);
+  });
+
+  it('relativePaths takes precedence over plugin-level publicPath (no error)', async () => {
+    // When both publicPath and relativePaths:true are set in plugin options,
+    // the plugin clears publicPath (line 185-186 in apply()) and proceeds without error.
+    // The conflict-error guard at line 198 is unreachable because line 185 always
+    // clears this.publicPath before line 189 can set it from compiler options.
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      publicPath: '/dist/',
+      relativePaths: true,
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    // No error — publicPath is silently cleared in favour of relativePaths
+    expect(result.errors).toHaveLength(0);
+    // Assets should use relative paths (not prefixed with /dist/)
+    const data = extractSwData(result.assets['sw.js']);
+    const allRelative = data.assets.main.every((a: string) => !a.startsWith('/dist/'));
+    expect(allRelative).toBe(true);
+  });
+
+  it('throws when ServiceWorker.output is an absolute path', async () => {
+    expect(() => {
+      baseConfig({
+        caches: 'all',
+        version: '[hash]',
+        ServiceWorker: { output: '/absolute/sw.js' },
+        __tests: testFlags,
+      });
+    }).toThrow('relative path');
+  });
+
+  it('preserves absolute URL externals when publicPath is set', async () => {
+    const config = baseConfig(
+      {
+        caches: { main: ['https://cdn.example.com/lib.js', ':rest:'] },
+        externals: ['https://cdn.example.com/lib.js'],
+        version: '[hash]',
+        __tests: testFlags,
+      },
+      { outputPublicPath: '/dist/' },
+    );
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.externals).toContain('https://cdn.example.com/lib.js');
+    // Must NOT be prefixed with publicPath
+    const wrongPrefix = data.externals.some(
+      (e: string) => e.startsWith('/dist/https://')
+    );
+    expect(wrongPrefix).toBe(false);
+  });
 });
