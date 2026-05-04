@@ -102,4 +102,21 @@ describe.each(['webpack', 'rspack'] as const)('%s — rewrites', (bundler: Bundl
     expect(data.externals).toContain('/rewritten');
     expect(data.externals).not.toContain('test-asset.html');
   });
+
+  it('supports rewrites as static object map', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      externals: ['original.js'],
+      version: '[hash]',
+      rewrites: { 'original.js': 'mapped.js' },
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.externals).toContain('./mapped.js');
+    expect(data.externals).not.toContain('./original.js');
+  });
 });
