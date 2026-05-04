@@ -66,4 +66,46 @@ describe.each(['webpack', 'rspack'] as const)('%s — sw entry (child compilatio
 
     expect(result.errors.length).toBeGreaterThan(0);
   });
+
+  it('removes intermediate __offline_serviceworker.js from output', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      ServiceWorker: {
+        entry: path.resolve(__dirname, '../helpers/fixtures/sw-custom-entry.js'),
+      },
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    // The intermediate asset should not be in final output
+    const intermediateKeys = Object.keys(result.assets).filter(
+      (k) => k.includes('__offline_')
+    );
+    expect(intermediateKeys).toHaveLength(0);
+  });
+
+  it('emits only __wpo data when entry is false', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      ServiceWorker: { entry: false },
+      __tests: { swMetadataOnly: false, ignoreRuntime: true, noVersionDump: true },
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const sw = result.assets['sw.js'];
+    expect(sw).toBeDefined();
+
+    // Should contain the __wpo data block
+    expect(sw).toContain('__wpo');
+
+    // Should NOT contain the SW template code (WebpackServiceWorker function)
+    expect(sw).not.toContain('WebpackServiceWorker');
+    expect(sw).not.toContain('addEventListener');
+  });
 });
