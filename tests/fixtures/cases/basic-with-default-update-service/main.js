@@ -1,1 +1,0 @@
-require(RUNTIME_PATH);

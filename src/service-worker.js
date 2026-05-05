@@ -95,11 +95,16 @@ export default class ServiceWorker {
         return;
       }
 
-      compilation.deleteAsset(filename);
-
       if (!plugin.__tests.swMetadataOnly) {
-        source += '\n\n' + asset.source.source();
+        // Use compilation.assets[filename] directly: in rspack, getAsset().source
+        // is undefined for child compilation assets (the asset object exists but
+        // its .source property is not populated). compilation.assets[filename] is
+        // the actual Source instance and works in both webpack and rspack.
+        const entrySource = compilation.assets[filename] || asset.source;
+        source += '\n\n' + entrySource.source();
       }
+
+      compilation.deleteAsset(filename);
     }
 
     const { RawSource } = compiler.webpack.sources;
