@@ -196,4 +196,35 @@ describe.each(['webpack', 'rspack'] as const)('%s — sw emission', (bundler: Bu
     expect(data1.version).toBe(data2.version);
     expect(data1.hashesMap).toEqual(data2.hashesMap);
   });
+
+  it('defaults to updateStrategy changed', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.strategy).toBe('changed');
+  });
+
+  it('uses date string when version is null', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: null,
+      __tests: testFlags,
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const data = extractSwData(result.assets['sw.js']);
+    expect(data.version).toBeDefined();
+    expect(data.version.length).toBeGreaterThan(0);
+    // Should NOT be a hex hash
+    expect(data.version).not.toMatch(/^[a-f0-9]+$/);
+  });
 });
