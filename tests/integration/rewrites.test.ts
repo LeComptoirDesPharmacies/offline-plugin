@@ -119,4 +119,59 @@ describe.each(['webpack', 'rspack'] as const)('%s — rewrites', (bundler: Bundl
     expect(data.externals).toContain('./mapped.js');
     expect(data.externals).not.toContain('./original.js');
   });
+
+  it('includes navigationPreload true in sw.js when explicitly set', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      ServiceWorker: { navigationPreload: true },
+      __tests: { ...testFlags, swMetadataOnly: false },
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const sw = result.assets['sw.js'];
+    expect(sw).toContain('navigationPreload');
+    // Should contain the boolean true (not a function)
+    expect(sw).toMatch(/navigationPreload:\s*true/);
+  });
+
+  it('defaults navigationPreload to true when responseStrategy is network-first', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      responseStrategy: 'network-first',
+      __tests: { ...testFlags, swMetadataOnly: false },
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const sw = result.assets['sw.js'];
+    expect(sw).toMatch(/navigationPreload:\s*true/);
+  });
+
+  it('serializes navigationPreload object with map and test functions', async () => {
+    const config = baseConfig({
+      caches: 'all',
+      version: '[hash]',
+      ServiceWorker: {
+        navigationPreload: {
+          map: function(url) { return url.toString(); },
+          test: function(url) { return url.pathname.startsWith('/app'); },
+        },
+      },
+      __tests: { ...testFlags, swMetadataOnly: false },
+    });
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const sw = result.assets['sw.js'];
+    expect(sw).toContain('navigationPreload');
+    // Should contain the serialized functions
+    expect(sw).toContain('/app');
+    expect(sw).toContain('pathname');
+  });
 });
