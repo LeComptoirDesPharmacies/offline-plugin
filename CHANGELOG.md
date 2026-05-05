@@ -10,6 +10,7 @@
 
 ### Unreleased
 
+* Rework the entire test suite. No more snapshot testing but real assertion on the output of the compilers, both with webpack and rspack
 * Add Rspack compatibility: replace `afterResolve` hook with a static module rule for runtime loader injection. Rspack ignores `createData.loaders` mutations in `afterResolve`, but static rules work in both webpack 5 and Rspack.
 * **BREAKING**: dropped `webpack@4` support. The plugin now requires `webpack@5` (or rspack). The legacy `compiler.plugin(...)` / `compiler.hooks.emit` / `compilation.cache` / direct `compilation.assets[x] =` code paths have been removed.
 * **BREAKING**: removed the `ServiceWorker.minify` option. Service-worker minification now follows the host bundler's `optimization.minimize` setting — whichever minifier the user configures (terser-webpack-plugin, swc-rspack, esbuild, …) naturally minifies the SW asset like any other JS asset. To skip SW minification while minifying the rest of the bundle, exclude it via the minimizer's `exclude` option. The `lib/misc/get-minification-plugin` module has been removed.
