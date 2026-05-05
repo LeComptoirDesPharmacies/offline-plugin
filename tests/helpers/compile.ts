@@ -72,18 +72,29 @@ export async function compile(bundler: Bundler, config: any): Promise<CompileRes
   }
 }
 
-export function baseConfig(pluginOptions: any, options: { entry?: string; outputPublicPath?: string; outputSubdir?: string } = {}) {
+export function baseConfig(pluginOptions: any, options: {
+  entry?: string;
+  entries?: Record<string, string>;
+  outputPublicPath?: string;
+  outputSubdir?: string;
+  devtool?: string;
+} = {}) {
   const OfflinePlugin = require('../../lib/index.js');
   const fixturesPath = path.resolve(__dirname, 'fixtures');
+
+  const entry = options.entries
+    ? options.entries
+    : { main: options.entry || './main.js' };
 
   return {
     mode: 'none' as const,
     context: fixturesPath,
-    entry: { main: options.entry || './main.js' },
+    entry,
     output: {
       filename: '[name].js',
       ...(options.outputPublicPath ? { publicPath: options.outputPublicPath } : {}),
     },
+    ...(options.devtool ? { devtool: options.devtool } : {}),
     plugins: [new OfflinePlugin(pluginOptions)],
     resolve: {
       extensions: ['.js'],

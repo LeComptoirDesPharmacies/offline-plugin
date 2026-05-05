@@ -117,18 +117,22 @@ describe.each(['webpack', 'rspack'] as const)('%s — sw emission', (bundler: Bu
   });
 
   it('hashesMap maps sha1 hashes to asset paths', async () => {
-    const config = baseConfig({
-      caches: 'all',
-      version: '[hash]',
-      __tests: testFlags,
-    });
+    const config = baseConfig(
+      {
+        caches: 'all',
+        version: '[hash]',
+        __tests: testFlags,
+      },
+      { entries: { main: './main.js', extra: './extra.js' } },
+    );
 
     const result = await compile(bundler, config);
 
     expect(result.errors).toHaveLength(0);
     const data = extractSwData(result.assets['sw.js']);
     const hashes = Object.keys(data.hashesMap);
-    expect(hashes.length).toBeGreaterThan(0);
+    // Should have multiple entries (one per asset)
+    expect(hashes.length).toBeGreaterThanOrEqual(2);
 
     // Every key should be a hex hash
     for (const hash of hashes) {
