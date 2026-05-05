@@ -214,4 +214,42 @@ describe.each(['webpack', 'rspack'] as const)('%s — runtime loader', (bundler:
     const bundle = result.assets['main.js'];
     expect(bundle).not.toContain('updateViaCache');
   });
+
+  it('removes HTTPS protocol check when forceInstall is true', async () => {
+    const config = baseConfig(
+      {
+        caches: 'all',
+        version: '[hash]',
+        ServiceWorker: { forceInstall: true },
+        __tests: testFlags,
+      },
+      { entry: './main-with-runtime.js' },
+    );
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const bundle = result.assets['main.js'];
+    // With forceInstall, only checks 'serviceWorker' in navigator
+    // Should NOT contain the https protocol check
+    expect(bundle).not.toContain('https:');
+  });
+
+  it('includes HTTPS protocol check when forceInstall is false', async () => {
+    const config = baseConfig(
+      {
+        caches: 'all',
+        version: '[hash]',
+        ServiceWorker: { forceInstall: false },
+        __tests: testFlags,
+      },
+      { entry: './main-with-runtime.js' },
+    );
+
+    const result = await compile(bundler, config);
+
+    expect(result.errors).toHaveLength(0);
+    const bundle = result.assets['main.js'];
+    expect(bundle).toContain('https:');
+  });
 });
