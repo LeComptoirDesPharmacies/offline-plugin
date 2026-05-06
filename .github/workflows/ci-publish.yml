@@ -187,8 +187,11 @@ jobs:
         run: |
           # `npm version` bumps package.json AND creates a git tag in one
           # atomic operation, guaranteeing the two never drift.
-          NEW_VERSION=$(npm version "${{ inputs.version }}" -m "Release %s")
-          echo "NEW_VERSION=${NEW_VERSION#v}" >> "$GITHUB_OUTPUT"
+          # Don't capture stdout — npm prints lifecycle script noise that
+          # breaks $GITHUB_OUTPUT parsing. Read version from package.json after.
+          npm version "${{ inputs.version }}" -m "Release %s"
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "NEW_VERSION=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Bumped to ${NEW_VERSION}"
 
       - name: Push commit and tag
