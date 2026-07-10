@@ -10,6 +10,10 @@
 
 ### Unreleased
 
+### 6.0.1 (2026-07-10)
+
+_No notable changes._
+
 ### 6.0.0 (2026-05-06)
 
 * Rework the entire test suite. No more snapshot testing but real assertion on the output of the compilers, both with webpack and rspack
