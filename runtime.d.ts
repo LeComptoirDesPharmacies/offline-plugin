@@ -42,6 +42,21 @@ export interface InstallOptions {
    * @memberOf InstallOptions
    */
   onUpdated?: () => void;
+
+  /**
+   * Event called when the ServiceWorker could not be registered or refreshed:
+   * `navigator.serviceWorker.register()` or `registration.update()` rejected
+   * (network failure, non-2xx response for the SW script, redirect on the
+   * script source, ...).
+   *
+   * The runtime forwards those rejections here and otherwise swallows them,
+   * so declaring this callback is the only way to observe such a failure.
+   *
+   * Not supported for AppCache.
+   *
+   * @memberOf InstallOptions
+   */
+  onError?: (payload: { source: string; error?: unknown }) => void;
 }
 
 /**
