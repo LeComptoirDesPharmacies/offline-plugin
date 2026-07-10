@@ -228,6 +228,28 @@ jobs:
           echo "Publishing $PACKAGE_VERSION with tag: $NPM_TAG"
           npm publish --tag "$NPM_TAG" --access public
 
+      # Runs after `npm publish` on purpose: a GitHub release must never
+      # advertise a version that failed to reach the registry.
+      - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.NEW_VERSION }}
+        run: |
+          # Same rule as the npm dist-tag: a hyphen means a prerelease
+          # (e.g. 6.0.0-rc.1), which must not be flagged as "Latest".
+          PRERELEASE=""
+          if echo "$VERSION" | grep -qE '\-'; then
+            PRERELEASE="--prerelease"
+          fi
+          # `--verify-tag` fails the step if the tag was not pushed, rather
+          # than silently creating an orphan tag from the current ref.
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --verify-tag \
+            $PRERELEASE
+
       - name: Dry run summary
         if: ${{ inputs.dry_run }}
         run: |
