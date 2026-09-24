@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs');
-const loaderUtils = require('loader-utils');
 
 const modules = [
   'async-waituntil.js'
@@ -12,15 +11,14 @@ module.exports.pitch = function pitch(remainingRequest, precedingRequest, data) 
 
   const callback = this.async();
   const templatePath = path.join(__dirname, 'sw-template.js');
-  const query = loaderUtils.parseQuery(this.query);
-  const params = JSON.parse(query.json);
+  const params = JSON.parse(new URLSearchParams(this.query.slice(1)).get('json'));
 
-  const request = loaderUtils.stringifyRequest(this, remainingRequest);
+  const request = JSON.stringify(this.utils.contextify(this.context || this.rootContext, remainingRequest));
   const source = 'module.exports = require(' + request + ')';
 
   const loaders = (params.loaders || []).map((loader) => {
     const loaderPath = path.join(__dirname, '../loaders', loader + '.js');
-    const loaderRequest = loaderUtils.stringifyRequest(this, '!!' + loaderPath);
+    const loaderRequest = JSON.stringify(this.utils.contextify(this.context || this.rootContext, '!!' + loaderPath))
 
     this.addDependency(loaderPath);
 
